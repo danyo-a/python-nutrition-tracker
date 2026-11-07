@@ -1,0 +1,16 @@
+{
+    "rice": {
+        "name": "rice",
+        "calories": 130,
+        "proteins": 2,
+        "carbs": 25,
+        "fat": 0.5
+    },
+    "apple": {
+        "name": "apple",
+        "calories": 50,
+        "proteins": 1,
+        "carbs": 10,
+        "fat": 0.2
+    }
+}
