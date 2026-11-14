@@ -6,6 +6,8 @@ from pathlib import Path
 
 import streamlit as st
 
+from nutrition_app import Food, FoodDatabase, Meal
+
 ROOT = Path(__file__).parent
 FOOD_FILE = ROOT / "food_database.json"
 CUSTOM_FOOD_FILE = ROOT / "custom_foods.json"
@@ -52,13 +54,22 @@ def save_json(path, value):
     temp.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
     temp.replace(path)
 
-def nutrients_for(food, grams):
-    data = foods[food]
-    return {key: float(data.get(key, 0)) * grams / 100 for key in NUTRIENTS}
-
-foods = read_json(FOOD_FILE, {})
+food_db = FoodDatabase()
+foods = {}
 custom_foods = read_json(CUSTOM_FOOD_FILE, {})
-foods.update(custom_foods)
+for source in (read_json(FOOD_FILE, {}), custom_foods):
+    for key, data in source.items():
+        food = Food(data.get("name", key), data.get("calories", 0),
+                    data.get("proteins", 0), data.get("carbs", 0), data.get("fat", 0))
+        food_db.add_food(food)
+        foods[key] = food.to_dict()
+
+def nutrients_for(food, grams):
+    food_item = food_db.get_food(food)
+    if food_item is None:
+        return {key: 0.0 for key in NUTRIENTS}
+    return food_item.calculate_value(float(grams))
+
 logs = read_json(LOG_FILE, {})
 if "goal" not in st.session_state:
     st.session_state.goal = 2000
@@ -81,11 +92,19 @@ with st.sidebar:
 
 st.markdown('<div class="hero"><div class="eyebrow">היום שלך, בקצב שלך</div><h1>מה אכלת היום?</h1><p>רישום גמיש, תמונה ברורה יותר של ההרגלים שלך.</p></div>', unsafe_allow_html=True)
 
-totals = {key: 0.0 for key in NUTRIENTS}
+meal_totals = {meal_type: Meal() for meal_type in MEALS}
 for entry in log:
-    if entry["name"] in foods:
-        for key, amount in nutrients_for(entry["name"], float(entry["grams"])).items():
-            totals[key] += amount
+    food_item = food_db.get_food(entry.get("name", ""))
+    if food_item is not None:
+        meal_type = entry.get("meal", MEALS[0])
+        if meal_type not in meal_totals:
+            meal_totals[meal_type] = Meal()
+        meal_totals[meal_type].add_food(food_item, float(entry.get("grams", 0)))
+
+totals = {key: 0.0 for key in NUTRIENTS}
+for meal in meal_totals.values():
+    for key, amount in meal.calculate_meal().items():
+        totals[key] += amount
 
 remaining = max(0, goal - totals["calories"])
 m1, m2, m3, m4 = st.columns(4)
@@ -183,11 +202,14 @@ with foods_tab:
             elif any(existing.casefold() == key for existing in foods):
                 st.error("המזון הזה כבר קיים במאגר.")
             else:
-                custom_foods[key] = {"name": new_name.strip(), "calories": new_calories,
-                                     "proteins": new_protein, "carbs": new_carbs, "fat": new_fat}
-                save_json(CUSTOM_FOOD_FILE, custom_foods)
-                foods.update(custom_foods)
-                st.success(f"{new_name.strip()} נוסף למאגר.")
+                new_food = Food(new_name.strip(), new_calories, new_protein, new_carbs, new_fat)
+                if food_db.add_food(new_food):
+                    custom_foods[key] = new_food.to_dict()
+                    foods[key] = new_food.to_dict()
+                    save_json(CUSTOM_FOOD_FILE, custom_foods)
+                    st.success(f"{new_name.strip()} נוסף למאגר.")
+                else:
+                    st.error("לא ניתן להוסיף את המזון למאגר.")
                 st.rerun()
 
     if foods:
