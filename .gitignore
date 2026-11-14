@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+custom_foods.json
+nutrition_log.json
+*.json.tmp
