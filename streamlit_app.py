@@ -8,6 +8,7 @@ import streamlit as st
 
 ROOT = Path(__file__).parent
 FOOD_FILE = ROOT / "food_database.json"
+CUSTOM_FOOD_FILE = ROOT / "custom_foods.json"
 LOG_FILE = ROOT / "nutrition_log.json"
 NUTRIENTS = ("calories", "proteins", "carbs", "fat")
 MEALS = ("ארוחת בוקר", "ארוחת צהריים", "ארוחת ערב", "נשנוש")
@@ -56,6 +57,8 @@ def nutrients_for(food, grams):
     return {key: float(data.get(key, 0)) * grams / 100 for key in NUTRIENTS}
 
 foods = read_json(FOOD_FILE, {})
+custom_foods = read_json(CUSTOM_FOOD_FILE, {})
+foods.update(custom_foods)
 logs = read_json(LOG_FILE, {})
 if "goal" not in st.session_state:
     st.session_state.goal = 2000
@@ -163,7 +166,7 @@ with log_tab:
 
 with foods_tab:
     st.markdown("### מאגר המזון")
-    st.caption("הוסיפו מזון משלכם. הערכים נשמרים בקובץ המאגר במחשב שבו האפליקציה פועלת.")
+    st.caption("הוסיפו מזון משלכם. הפריטים נשמרים בקובץ אישי במחשב שבו האפליקציה פועלת.")
     with st.form("new_food", clear_on_submit=True):
         c1, c2 = st.columns(2)
         new_name = c1.text_input("שם המזון")
@@ -177,12 +180,13 @@ with foods_tab:
             key = new_name.strip().casefold()
             if not key:
                 st.error("צריך להזין שם למזון.")
-            elif key in foods:
+            elif any(existing.casefold() == key for existing in foods):
                 st.error("המזון הזה כבר קיים במאגר.")
             else:
-                foods[key] = {"name": new_name.strip(), "calories": new_calories,
-                              "proteins": new_protein, "carbs": new_carbs, "fat": new_fat}
-                save_json(FOOD_FILE, foods)
+                custom_foods[key] = {"name": new_name.strip(), "calories": new_calories,
+                                     "proteins": new_protein, "carbs": new_carbs, "fat": new_fat}
+                save_json(CUSTOM_FOOD_FILE, custom_foods)
+                foods.update(custom_foods)
                 st.success(f"{new_name.strip()} נוסף למאגר.")
                 st.rerun()
 
